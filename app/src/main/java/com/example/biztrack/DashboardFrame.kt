@@ -38,6 +38,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,6 +51,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.biztrack.ui.theme.BIZTRACKTheme
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,6 +67,25 @@ fun DashboardScreen(
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var showLogoutDialog by remember { mutableStateOf(false) }
+
+    val auth = FirebaseAuth.getInstance()
+    val currentUser = auth.currentUser
+    val userEmail = viewModel.currentUserEmail.ifBlank { currentUser?.email ?: "N/A" }
+    var username by remember { mutableStateOf("") }
+
+    val displayUsername = viewModel.currentUsername.ifBlank { username.ifBlank { "User" } }
+
+    LaunchedEffect(currentUser?.uid) {
+        if (currentUser != null) {
+            FirebaseFirestore.getInstance().collection("users").document(currentUser.uid).get()
+                .addOnSuccessListener { doc ->
+                    username = doc.getString("username") ?: (currentUser.email?.substringBefore("@") ?: "User")
+                }
+                .addOnFailureListener {
+                    username = currentUser.email?.substringBefore("@") ?: "User"
+                }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -132,7 +154,7 @@ fun DashboardScreen(
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Logout") },
+                                text = { Text("Account Profile & Logout") },
                                 leadingIcon = { Icon(Icons.Default.Person, contentDescription = null) },
                                 onClick = {
                                     menuExpanded = false
@@ -146,7 +168,7 @@ fun DashboardScreen(
                     IconButton(onClick = { showLogoutDialog = true }) {
                         Icon(
                             imageVector = Icons.Default.Person,
-                            contentDescription = "User Profile"
+                            contentDescription = "User Profile & Logout"
                         )
                     }
                 },
@@ -165,7 +187,7 @@ fun DashboardScreen(
                 .padding(16.dp)
         ) {
             Text(
-                text = "Welcome back!",
+                text = "Welcome back, $displayUsername!",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -372,16 +394,75 @@ fun DashboardScreen(
         }
     }
 
-    // Logout Confirmation Option Dialog
+    // Account Profile & Logout Confirmation Dialog
     if (showLogoutDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutDialog = false },
-            title = { Text("Logout Confirmation", fontWeight = FontWeight.Bold) },
-            text = { Text("Are you sure you want to log out of BIZTRACK?") },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Text("Account Profile & Logout", fontWeight = FontWeight.Bold)
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        text = "You are currently signed in as:",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(14.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "Username:",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = displayUsername,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Email Address:",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = userEmail,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                    Text(
+                        text = "Are you sure you want to log out of BIZTRACK?",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            },
             confirmButton = {
                 Button(
                     onClick = {
                         showLogoutDialog = false
+                        viewModel.logout()
                         onLogout()
                     },
                     colors = ButtonDefaults.buttonColors(

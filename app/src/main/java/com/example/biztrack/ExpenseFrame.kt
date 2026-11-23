@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -54,6 +55,7 @@ fun ExpenseScreen(
     onNavigateBack: () -> Unit = {}
 ) {
     var showAddExpenseDialog by remember { mutableStateOf(false) }
+    var expenseToEdit by remember { mutableStateOf<Expense?>(null) }
     var expenseToDelete by remember { mutableStateOf<Expense?>(null) }
 
     Scaffold(
@@ -82,7 +84,7 @@ fun ExpenseScreen(
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            // Expenses Summary Card (matching Sales record styling)
+            // Expenses Summary Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(
@@ -147,6 +149,7 @@ fun ExpenseScreen(
                     items(viewModel.expenses, key = { it.id }) { expense ->
                         ExpenseItemCard(
                             expense = expense,
+                            onEdit = { expenseToEdit = expense },
                             onDelete = { expenseToDelete = expense }
                         )
                     }
@@ -161,6 +164,17 @@ fun ExpenseScreen(
             onConfirm = { description, amount ->
                 viewModel.addExpense(description, amount)
                 showAddExpenseDialog = false
+            }
+        )
+    }
+
+    if (expenseToEdit != null) {
+        EditExpenseDialog(
+            expense = expenseToEdit!!,
+            onDismiss = { expenseToEdit = null },
+            onConfirm = { description, amount ->
+                viewModel.updateExpense(expenseToEdit!!.id, description, amount)
+                expenseToEdit = null
             }
         )
     }
@@ -196,6 +210,7 @@ fun ExpenseScreen(
 @Composable
 fun ExpenseItemCard(
     expense: Expense,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
     Card(
@@ -232,6 +247,13 @@ fun ExpenseItemCard(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
+                IconButton(onClick = onEdit) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = "Edit",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
                 IconButton(onClick = onDelete) {
                     Icon(
                         imageVector = Icons.Default.Delete,
@@ -295,6 +317,68 @@ fun AddExpenseDialog(
                 }
             ) {
                 Text("Save Expense")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun EditExpenseDialog(
+    expense: Expense,
+    onDismiss: () -> Unit,
+    onConfirm: (description: String, amount: Double) -> Unit
+) {
+    var description by remember { mutableStateOf(expense.description) }
+    var amountText by remember { mutableStateOf(expense.amount.toString()) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Expense Record") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Expense Description") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = amountText,
+                    onValueChange = { amountText = it },
+                    label = { Text("Amount (MWK)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (errorMessage != null) {
+                    Text(
+                        text = errorMessage!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val amount = amountText.toDoubleOrNull()
+                    if (description.isBlank() || amount == null || amount <= 0) {
+                        errorMessage = "Please enter a valid description and positive amount"
+                    } else {
+                        onConfirm(description, amount)
+                    }
+                }
+            ) {
+                Text("Update Expense")
             }
         },
         dismissButton = {

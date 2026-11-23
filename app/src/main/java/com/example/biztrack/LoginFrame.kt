@@ -1,5 +1,7 @@
 package com.example.biztrack
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -25,8 +27,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.example.biztrack.ui.theme.BIZTRACKTheme
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 @Composable
 fun LoginScreen(
@@ -36,10 +39,12 @@ fun LoginScreen(
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
@@ -97,15 +102,69 @@ fun LoginScreen(
             onClick = {
                 if (username.isBlank() || password.isBlank()) {
                     errorMessage = "Please fill in all fields"
+                    return@Button
+                }
+                isLoading = true
+                val input = username.trim()
+                val trimmedLower = input.lowercase()
+
+                fun trySignInList(authEmails: List<String>) {
+                    if (authEmails.isEmpty()) {
+                        isLoading = false
+                        errorMessage = "Incorrect username, email, or password"
+                        return
+                    }
+                    val currentTryEmail = authEmails.first()
+                    val remainingEmails = authEmails.drop(1)
+
+                    FirebaseAuth.getInstance().signInWithEmailAndPassword(currentTryEmail, password)
+                        .addOnCompleteListener { task ->
+                            if (task.isSuccessful) {
+                                isLoading = false
+                                onLoginSuccess()
+                            } else if (remainingEmails.isNotEmpty()) {
+                                trySignInList(remainingEmails)
+                            } else {
+                                isLoading = false
+                                errorMessage = "Incorrect username, email, or password"
+                            }
+                        }
+                }
+
+                val db = FirebaseFirestore.getInstance()
+
+                if (trimmedLower.contains("@") && !trimmedLower.endsWith("@biztrack.app")) {
+                    // User entered an email address like "debbie@gmail.com"
+                    val syntheticEmail = "${input.substringBefore("@").lowercase()}@biztrack.app"
+                    db.collection("users").whereEqualTo("email", input).get()
+                        .addOnSuccessListener { querySnapshot ->
+                            val foundUsername = if (!querySnapshot.isEmpty) querySnapshot.documents[0].getString("username") else null
+                            val targetedSynthetic = if (!foundUsername.isNullOrBlank()) "${foundUsername.trim().lowercase()}@biztrack.app" else syntheticEmail
+                            trySignInList(listOf(input, targetedSynthetic, syntheticEmail).distinct())
+                        }
+                        .addOnFailureListener {
+                            trySignInList(listOf(input, syntheticEmail))
+                        }
                 } else {
-                    onLoginSuccess()
+                    // User entered a username like "debbie"
+                    val syntheticEmail = if (trimmedLower.endsWith("@biztrack.app")) trimmedLower else "${trimmedLower}@biztrack.app"
+                    db.collection("usernames").document(trimmedLower).get()
+                        .addOnSuccessListener { snapshot ->
+                            val realEmail = if (snapshot != null && snapshot.exists()) snapshot.getString("email") else null
+                            val tryList = if (!realEmail.isNullOrBlank()) listOf(realEmail, syntheticEmail) else listOf(syntheticEmail)
+                            trySignInList(tryList.distinct())
+                        }
+                        .addOnFailureListener {
+                            trySignInList(listOf(syntheticEmail))
+                        }
                 }
             },
+            enabled = !isLoading,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(50.dp)
         ) {
-            Text("Login", style = MaterialTheme.typography.titleMedium)
+            Text(if (isLoading) "Logging in..." else "Login", style = MaterialTheme.typography.titleMedium)
         }
 
         Spacer(modifier = Modifier.height(16.dp))

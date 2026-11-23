@@ -1,6 +1,7 @@
 package com.example.biztrack
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,7 +19,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -58,6 +62,7 @@ fun ProductScreen(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var showAddDialog by remember { mutableStateOf(false) }
+    var productToEdit by remember { mutableStateOf<Product?>(null) }
     var productToDelete by remember { mutableStateOf<Product?>(null) }
 
     val filteredProducts = viewModel.products.filter {
@@ -91,7 +96,7 @@ fun ProductScreen(
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            // Search Bar (FR-04)
+            // Search Bar
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -121,6 +126,7 @@ fun ProductScreen(
                     items(filteredProducts, key = { it.id }) { product ->
                         ProductItemCard(
                             product = product,
+                            onEdit = { productToEdit = product },
                             onDelete = { productToDelete = product }
                         )
                     }
@@ -135,6 +141,17 @@ fun ProductScreen(
             onConfirm = { name, category, buyingPrice, sellingPrice, qty ->
                 viewModel.addProduct(name, category, buyingPrice, sellingPrice, qty)
                 showAddDialog = false
+            }
+        )
+    }
+
+    if (productToEdit != null) {
+        EditProductDialog(
+            product = productToEdit!!,
+            onDismiss = { productToEdit = null },
+            onConfirm = { name, category, buyingPrice, sellingPrice, qty ->
+                viewModel.updateProduct(productToEdit!!.id, name, category, buyingPrice, sellingPrice, qty)
+                productToEdit = null
             }
         )
     }
@@ -170,8 +187,24 @@ fun ProductScreen(
 @Composable
 fun ProductItemCard(
     product: Product,
+    onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    var showSoldOutMessage by remember { mutableStateOf(false) }
+
+    if (showSoldOutMessage) {
+        AlertDialog(
+            onDismissRequest = { showSoldOutMessage = false },
+            title = { Text("Product Status", fontWeight = FontWeight.Bold) },
+            text = { Text("Product '${product.name}' is sold out and out of stock.") },
+            confirmButton = {
+                TextButton(onClick = { showSoldOutMessage = false }) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -203,21 +236,33 @@ fun ProductItemCard(
                     )
                 }
 
-                if (product.isSoldOut) {
+                if (product.isSoldOut || product.currentRemaining <= 0) {
                     Box(
                         modifier = Modifier
                             .background(
                                 color = MaterialTheme.colorScheme.errorContainer,
                                 shape = RoundedCornerShape(8.dp)
                             )
+                            .clickable { showSoldOutMessage = true }
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
-                        Text(
-                            text = "SOLD OUT",
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Sold Out Mark Sign",
+                                tint = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "SOLD OUT",
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 } else {
                     Box(
@@ -229,7 +274,7 @@ fun ProductItemCard(
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
-                            text = "Stock: ${product.remainingQuantity}/${product.quantityPurchased}",
+                            text = "Stock: ${product.currentRemaining}/${product.quantityPurchased}",
                             color = MaterialTheme.colorScheme.onPrimaryContainer,
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium
@@ -237,12 +282,21 @@ fun ProductItemCard(
                     }
                 }
 
-                IconButton(onClick = onDelete) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = Color(0xFFE11D48) // Soft Coral Red bin icon
-                    )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onEdit) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(onClick = onDelete) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Delete",
+                            tint = Color(0xFFE11D48) // Soft Coral Red bin icon
+                        )
+                    }
                 }
             }
 
@@ -377,6 +431,120 @@ fun AddProductDialog(
                 }
             ) {
                 Text("Save Product")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+@Composable
+fun EditProductDialog(
+    product: Product,
+    onDismiss: () -> Unit,
+    onConfirm: (name: String, category: String, buyingPrice: Double, sellingPrice: Double, qty: Int) -> Unit
+) {
+    var name by remember { mutableStateOf(product.name) }
+    var category by remember { mutableStateOf(product.category) }
+    var buyingPrice by remember { mutableStateOf(product.buyingPrice.toString()) }
+    var sellingPrice by remember { mutableStateOf(product.sellingPrice.toString()) }
+    var quantity by remember { mutableStateOf(product.quantityPurchased.toString()) }
+    var errorText by remember { mutableStateOf<String?>(if (product.isSoldOut || product.currentRemaining <= 0) "Product out of stock" else null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Product") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (product.isSoldOut || product.currentRemaining <= 0) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                            .padding(8.dp)
+                    ) {
+                        Text(
+                            text = "Product out of stock",
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Product Name") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
+                    value = category,
+                    onValueChange = { category = it },
+                    label = { Text("Category (e.g. Groceries)") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = buyingPrice,
+                        onValueChange = { buyingPrice = it },
+                        label = { Text("Buying Price (MWK)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                    OutlinedTextField(
+                        value = sellingPrice,
+                        onValueChange = { sellingPrice = it },
+                        label = { Text("Selling Price (MWK)") },
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        singleLine = true,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                OutlinedTextField(
+                    value = quantity,
+                    onValueChange = { quantity = it },
+                    label = { Text("Quantity Purchased") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (errorText != null) {
+                    Text(
+                        text = errorText!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    val bp = buyingPrice.toDoubleOrNull()
+                    val sp = sellingPrice.toDoubleOrNull()
+                    val qty = quantity.toIntOrNull()
+
+                    if (name.isBlank() || category.isBlank() || bp == null || sp == null || qty == null) {
+                        errorText = "Please enter valid values for all fields"
+                    } else if ((product.isSoldOut || product.currentRemaining <= 0) && qty <= product.quantityPurchased) {
+                        errorText = "Product out of stock"
+                    } else {
+                        onConfirm(name, category, bp, sp, qty)
+                    }
+                }
+            ) {
+                Text("Update Product")
             }
         },
         dismissButton = {

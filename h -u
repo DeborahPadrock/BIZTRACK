@@ -1,0 +1,12 @@
+[33m0df5a9e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mUI[m[33m)[m feat: add Report frame layout
+[33m2b40c4e[m feat: add Expense frame layout
+[33mfb766bf[m feat: add Sales frame layout
+[33me51629a[m feat: add Product frame layout
+[33mebf8bc9[m feat: add Dashboard frame layout
+[33m2390a54[m feat: add Login frame layout
+[33mfac6995[m feat: add Create Account frame layout
+[33mda3a5bc[m feat:  MainActivity entry point
+[33m5a3149f[m feat: BizTrackViewModel state management
+[33mf68d8a1[m feat:  BizTrackModels data structure
+[33mbca830c[m feat:  BizTrackLogo component
+[33m13ac469[m style: add ui theme components

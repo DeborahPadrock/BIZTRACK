@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "477470911858",
+    "project_id": "biztrack-da628",
+    "storage_bucket": "biztrack-da628.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:477470911858:android:0a646e562b9417ab92c1eb",
+        "android_client_info": {
+          "package_name": "com.example.biztrack"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBP4wVMWYaXqsNThUYN1qd1o7bmiB2DI0U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

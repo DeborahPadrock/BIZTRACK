@@ -10,6 +10,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.example.biztrack.ui.theme.BIZTRACKTheme
+import com.google.firebase.FirebaseApp
+import com.google.firebase.auth.FirebaseAuth
 
 enum class BizTrackScreen {
     Login,
@@ -26,6 +28,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        if (FirebaseApp.getApps(this).isEmpty()) {
+            FirebaseApp.initializeApp(this)
+        }
+
         enableEdgeToEdge()
 
         setContent {
@@ -38,13 +44,19 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun BizTrackApp() {
-    var currentScreen by remember { mutableStateOf(BizTrackScreen.Login) }
+    val auth = remember { FirebaseAuth.getInstance() }
+    var currentScreen by remember {
+        mutableStateOf(
+            if (auth.currentUser != null) BizTrackScreen.Dashboard else BizTrackScreen.Login
+        )
+    }
     val viewModel = remember { BizTrackViewModel() }
 
     when (currentScreen) {
         BizTrackScreen.Login -> {
             LoginScreen(
                 onLoginSuccess = {
+                    viewModel.loadUserData()
                     currentScreen = BizTrackScreen.Dashboard
                 },
                 onNavigateToCreateAccount = {
@@ -55,6 +67,7 @@ fun BizTrackApp() {
         BizTrackScreen.CreateAccount -> {
             CreateAccountScreen(
                 onAccountCreated = {
+                    viewModel.loadUserData()
                     currentScreen = BizTrackScreen.Dashboard
                 },
                 onNavigateToLogin = {
@@ -78,6 +91,8 @@ fun BizTrackApp() {
                     currentScreen = BizTrackScreen.Reports
                 },
                 onLogout = {
+                    auth.signOut()
+                    viewModel.clearData()
                     currentScreen = BizTrackScreen.Login
                 }
             )
@@ -116,3 +131,4 @@ fun BizTrackApp() {
         }
     }
 }
+
